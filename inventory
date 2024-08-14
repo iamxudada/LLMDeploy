@@ -1,0 +1,15 @@
+[master]
+192.168.182.110 ansible_user=root ansible_ssh_pass=mypassword ansible_port=22
+
+[workers]
+192.168.182.111
+192.168.182.112
+
+[lmd:children]
+master
+workers
+
+
+[lmd:vars]
+is_createdatalvm=true
+lvm_compositiondisks="/dev/sdb /dev/sdc"

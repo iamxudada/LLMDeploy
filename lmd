@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2024-08-01 xulinchun <xulinchun0806@outlook.com>
+#
+# This file is part of LMD.
+#
+# LMD is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2.1 of the License, or
+# (at your option) any later version.
+#
+# LMD is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with LMD.  If not, see <http://www.gnu.org/licenses/>.
+#==============================================================================
+
+export TMOUT=0
+umask 022
+
+RED='\033[31m'
+GREEN='\033[32m'
+YELLOW='\033[33m'
+RESET='\033[0m'
+
+AllowScriptDependencies() {
+    os_name=$(awk -F '=' '/^NAME/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
+    os_architecture=$(uname -m)
+
+    case "$os_name" in
+        "Ubuntu")
+            dpkg -i install-denpend/files/sshpass_$os_architecture.deb
+            ;;
+        "EulerOS")
+            rpm -ivh install-denpend/files/sshpass_$os_architecture.rpm
+            ;;
+        *)
+            echo -e "${RED} Unsupported OS: $os_name ${RESET}"
+            exit 1
+            ;;
+    esac
+
+    # 安装 miniconda
+    wget -c -q -O /tmp/lmd/miniconda.sh https://mirror.nju.edu.cn/anaconda/miniconda/Miniconda3-py310_24.5.0-0-Linux-$os_architecture.sh
+    yes|bash /tmp/miniconda.sh -b -u -p /tmp/lmd/miniconda
+
+    # 安装 ansible
+    /tmp/lmd/miniconda/bin/python3.10 -m pip config set global.index-url https://mirror.nju.edu.cn/pypi/web/simple
+    /tmp/lmd/miniconda/bin/python3.10 -m pip install --upgrade --no-cache-dir ansible
+}
+
+ScriptConfigurationDependency() {
+    if [ ! -f ./inventory ]; then
+        echo "inventory file not found"
+        exit 1
+    fi
+
+    if [ ! -f ./ansible.cfg ]; then
+        echo "ansible.cfg file not found"
+        exit 1
+    fi
+}
+
+install() {
+    ScriptConfigurationDependency
+    AllowScriptDependencies
+    /tmp/lmd/miniconda/bin/ansible-playbook lmd-install.yaml
+}
+
+
+uninstall() {
+    ScriptConfigurationDependency
+    AllowScriptDependencies
+    /tmp/lmd/miniconda/bin/ansible-playbook lmd-uninstall.yaml
+}
+
+clear() {
+    os_name=$(awk -F '=' '/^NAME/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
+    os_architecture=$(uname -m)
+
+    case "$os_name" in
+        "Ubuntu")
+            dpkg -P sshpass_$os_architecture.deb
+            ;;
+        "EulerOS")
+            rpm -e sshpass_$os_architecture.rpm
+            ;;
+        *)
+            echo -e "${RED} Unsupported OS: $os_name ${RESET}"
+            exit 1
+            ;;
+    esac
+
+    if [ -d /tmp/lmd ]; then
+        rm -rf /tmp/lmd
+    fi
+
+    rm -rf ./*
+
+    echo -e "${GREEN}LMD clear success!${RESET}"
+}
+
+
+main() {
+    case "$1" in
+        install)
+            echo -e "${YELLOW}是否已经阅读过 README.md 文件？[yY/nN] ${RESET}"
+            read choice
+            case "$choice" in
+                y|Y )
+                    install
+                    ;;
+                * )
+                    echo -e "${RED}请注意在执行该脚本之前，请先阅读 README.md 文件 ${RESET}"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        uninstall)
+            echo -e "${YELLOW}是否已经阅读过 README.md 文件？[yY/nN] ${RESET}"
+            read choice
+            case "$choice" in
+                y|Y )
+                    uninstall
+                    ;;
+                * )
+                    echo -e "${RED}请注意在执行该脚本之前，请先阅读 README.md 文件 ${RESET}"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        clear)
+            echo -e "${YELLOW}是否已经阅读过 README.md 文件？[yY/nN] ${RESET}"
+            read choice
+            case "$choice" in
+                y|Y )
+                    clear
+                    ;;
+                * )
+                    echo -e "${RED}请注意在执行该脚本之前，请先阅读 README.md 文件 ${RESET}"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        *)
+            echo -e "${RED}请注意在执行该脚本之前，请先阅读 README.md 文件 ${RESET}\n"
+            echo -e "${RED}Usage: $0 {install|uninstall|clear} ${RESET}"
+            exit 1
+            ;;
+    esac
+}
+
+
+
+main "$@" || exit 1

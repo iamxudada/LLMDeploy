@@ -1,0 +1,8 @@
+- hosts: lmd
+  roles:
+    - install-denpend
+    - install-docker
+    - install-driver
+- hosts: master
+  roles:
+    - install-lmd

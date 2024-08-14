@@ -1,0 +1,6 @@
+- hosts: lmd
+  remote_user: root
+  gather_facts: no
+  tasks:
+  - debug:
+      msg: "{{ groups.master }}"

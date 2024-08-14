@@ -1,0 +1,222 @@
+services:
+  db:
+    image: 'quay.io/supiedt/db:v1'
+    container_name: 'lmd-db'
+    restart: always
+    env_file: .env
+    volumes:
+      - './volumes/mysql/data:/var/lib/mysql'
+    ports:
+      - '30050:3306'
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --connect-timeout=60
+      - --max-allowed-packet=128M
+      - --max-connections=1000
+      - --max-user-connections=1000
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --server-id=1
+
+  valkey:
+    image: 'quay.io/supiedt/valkey:v1'
+    container_name: 'lmd-redis'
+    restart: always
+    env_file: .env
+    ports:
+      - '30051:6379'
+    volumes:
+      - './volumes/redis/data:/data'
+    command:
+      - --requirepass $${LMD_PASSWD}
+      - --appendonly yes
+      - --ignore-warnings ARM64-COW-BUG
+
+  minio:
+    image: 'quay.io/supiedt/minio:v1'
+    container_name: 'lmd-minio'
+    restart: always
+    env_file: .env
+    ports:
+      - '30053:9001'
+      - '30052:9000'
+    volumes:
+      - './volumes/minio/data:/minio_data'
+    command: minio server /minio_data --console-address ":9001"
+
+  clickhouse:
+    image: 'quay.io/supiedt/clickhouse:v1'
+    container_name: 'lmd-clickhouse'
+    restart: always
+    env_file: .env
+    privileged: true
+    ports:
+      - '30054:8123'
+      - '30055:9000'
+    volumes:
+      - './volumes/clickhouse/data:/var/lib/clickhouse'
+      - './volumes/clickhouse/logs:/var/log/clickhouse'
+
+  etcd:
+    container_name: 'lmd-etcd'
+    image: 'quay.io/supiedt/etcd:v1'
+    restart: always
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ./volumes/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+
+  standalone:
+    container_name: 'lmd-milvus'
+    image: 'quay.io/supiedt/milvus:v1'
+    restart: always
+    env_file: .env
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ./volumes/milvus/data:/var/lib/milvus
+      - ./volumes/milvus/milvus.yaml:/milvus/configs/milvus.yaml
+    ports:
+      - "30056:9091"
+      - "30057:19530"
+    depends_on:
+      - "etcd"
+      - "minio"
+
+  tdengine:
+    image: quay.io/supiedt/tdengine:v1
+    container_name: 'lmd-tdengine'
+    restart: always
+    env_file: .env
+    ports:
+      - 30058:6030
+      - 30059:6041
+    volumes:
+      - ./volumes/tdengine/data:/var/lib/taos
+      - ./volumes/tdengine/logs:/var/log/taos
+
+  kkfileview:
+    image: 'quay.io/supiedt/kkfileview:v1'
+    container_name: 'lmd-kkfileview'
+    restart: always
+    env_file: .env
+    ports:
+      - '30060:8012'
+    volumes:
+      - './volumes/kkfileview:/workspace/files'
+    command: ["sh", "-c", "java -jar kkFileView.jar"]
+
+  registry:
+    image: 'quay.io/supiedt/registry:v1'
+    container_name: 'lmd-registry'
+    restart: always
+    env_file: .env
+    ports:
+      - '30061:5000'
+    volumes:
+      - './volumes/registry/data:/var/lib/registry'
+
+  frontend:
+    image: 'quay.io/supiedt/frontend:v1'
+    container_name: 'lmd-frontend'
+    restart: always
+    env_file: .env
+    ports:
+      - '30080:80'
+    volumes:
+      - './volumes/frontend/dist:/srv'
+
+  backend:
+    image: 'quay.io/supiedt/backend:v1'
+    container_name: 'lmd-backend'
+    restart: always
+    env_file: .env
+    ports:
+      - '30081:30081'
+    volumes:
+      - '/run/docker.sock:/run/docker.sock:rw'
+      - './backend/lmd:/app/lmd'
+      - './backend/logs:/app/zzlogs'
+      - './backend/BaseModels:/app/BaseModels'
+
+  lmd-py:
+    image: 'quay.io/supiedt/lmdpy:'
+    container_name: 'lmd-py'
+    restart: always
+    env_file: .env
+    ports:
+      - '30063:8001'
+    volumes:
+      - './volumes/lmd-py:/workspace'
+    command: ["python3", "/workspace/app.py"]
+
+  lmd-py-ngram:
+    image: '39.129.20.152:30085/ascend/lmdpy:v1.0.2-ascend'
+    container_name: 'lmd-py-ngram'
+    privileged: true
+    restart: always
+    env_file: .env
+    volumes:
+      - './volumes/lmd-py:/workspace'
+    command: ["python3", "/workspace/ngram_app.py"]
+
+  lmd-py-rerankapp:
+    container_name: lmd-py-rerankapp
+    image: 39.129.20.152:30085/ascend/lmdpy-embedding-rerank:v1.2
+    privileged: true
+    restart: always
+    env_file: .env
+    ports:
+      - 30100:8003
+    environment:
+      - TZ=Asia/Shanghai
+      - DEVICES_NUMS_IDS=6
+    devices:
+      - /dev/davinci0:/dev/davinci0
+      - /dev/davinci1:/dev/davinci1
+      - /dev/davinci2:/dev/davinci2
+      - /dev/davinci3:/dev/davinci3
+      - /dev/davinci4:/dev/davinci4
+      - /dev/davinci5:/dev/davinci5
+      - /dev/davinci6:/dev/davinci6
+      - /dev/davinci7:/dev/davinci7
+      - /dev/davinci_manager:/dev/davinci_manager
+      - /dev/devmm_svm:/dev/devmm_svm
+      - /dev/hisi_hdc:/dev/hisi_hdc
+    volumes:
+      - ./volumes/lmd-py:/workspace
+    working_dir: /workspace
+    command: ["/usr/bin/start-rerank"]
+
+  lmd-py-embeddingapp:
+    container_name: lmd-py-embeddingapp
+    image: 39.129.20.152:30085/ascend/lmdpy-embedding-rerank:v1.2
+    privileged: true
+    env_file: .env
+    environment:
+      - TZ=Asia/Shanghai
+      - DEVICES_NUMS_IDS=7
+    devices:
+      - /dev/davinci0:/dev/davinci0
+      - /dev/davinci1:/dev/davinci1
+      - /dev/davinci2:/dev/davinci2
+      - /dev/davinci3:/dev/davinci3
+      - /dev/davinci4:/dev/davinci4
+      - /dev/davinci5:/dev/davinci5
+      - /dev/davinci6:/dev/davinci6
+      - /dev/davinci7:/dev/davinci7
+      - /dev/davinci_manager:/dev/davinci_manager
+      - /dev/devmm_svm:/dev/devmm_svm
+      - /dev/hisi_hdc:/dev/hisi_hdc
+    volumes:
+      - ./volumes/lmd-py:/workspace
+    working_dir: /workspace
+    ports:
+      - 30101:8004
+    command: ["/bin/sh", "-c", "export LD_PRELOAD=/usr/local/lib/python3.9/dist-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0 && /usr/bin/start-embedding"]

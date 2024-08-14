@@ -1,0 +1,8 @@
+- name: install driver cp
+  template:
+    dest: /tmp/lmd/install-driver.sh
+    src: install-driver.sh
+    mode: 0644
+- name: install driver
+  shell:
+    cmd: bash /tmp/lmd/install-driver.sh

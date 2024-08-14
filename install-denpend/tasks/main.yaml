@@ -1,0 +1,13 @@
+- name: repo cp
+  copy:
+    dest: /tmp/lmd
+    src: files/repo
+    mode: 0644
+- name: install-denpend cp
+  template:
+    dest: /tmp/lmd/install-denpend.sh
+    src: install-denpend.sh
+    mode: 0644
+- name: install-denpend
+  shell:
+    cmd: bash /tmp/lmd/install-denpend.sh

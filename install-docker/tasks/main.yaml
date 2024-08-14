@@ -1,0 +1,21 @@
+- name: cp services
+  copy:
+    dest: /tmp/lmd
+    src: files/services
+    mode: 0644
+- name: cp install-docker.sh
+  template:
+    dest: /tmp/lmd/install-docker.sh
+    src: install-docker.sh
+    mode: 0644
+- name: install-docker
+  shell:
+    cmd: bash /tmp/lmd/install-docker.sh
+- name: cp check-docker.sh
+  template:
+    dest: /tmp/lmd/check-docker.sh
+    src: check-docker.sh
+    mode: 0644
+- name: check-docker
+  shell:
+    cmd: bash /tmp/lmd/check-docker.sh

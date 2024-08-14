@@ -1,0 +1,8 @@
+- name: uninstall lmd cp
+  template:
+    dest: /tmp/lmd/uninstall-all.sh
+    src: uninstall-all.sh
+    mode: 0644
+- name: uninstall lmd
+  shell:
+    cmd: bash /tmp/lmd/uninstall-all.sh

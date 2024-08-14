@@ -1,0 +1,12 @@
+- name: install lmd cp
+  template:
+    dest: /tmp/lmd/install-lmd.sh
+    src: install-lmd.sh
+    mode: 0644
+- name: lmd compose cp
+  copy:
+    dest: /data/applications/lmd
+    src: lmd
+- name: install driver
+  shell:
+    cmd: bash /tmp/lmd/install-lmd.sh
