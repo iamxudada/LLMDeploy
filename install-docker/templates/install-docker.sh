@@ -28,11 +28,11 @@ RESET='\033[0m'
 
 # 获取安装包
 if [[ $(uname -m) = 'x86_64' ]]; then
-  DockerUrl="http://39.129.20.152:30083/api/public/dl/3vs2vfyz/Dependencies/docker/docker-20.10.24-x86_64.tgz"
-  DockerComposeUrl="http://39.129.20.152:30083/api/public/dl/xKkUBduX/Dependencies/docker/docker-compose-linux-x86_64"
+  DockerUrl="https://mirror.sjtu.edu.cn/docker-ce/linux/static/stable/x86_64/docker-26.1.4.tgz"
+  DockerComposeUrl="https://github.com/docker/compose/releases/download/v2.27.3/docker-compose-linux-x86_64"
 elif [[ $(uname -m) = 'aarch64' ]]; then
-  DockerUrl="http://39.129.20.152:30083/api/public/dl/j0YExKvH/Dependencies/docker/docker-20.10.24-aarch64.tgz"
-  DockerComposeUrl="http://39.129.20.152:30083/api/public/dl/VyiUjb_0/Dependencies/docker/docker-compose-linux-aarch64"
+  DockerUrl="https://mirror.sjtu.edu.cn/docker-ce/linux/static/stable/aarch64/docker-26.1.4.tgz"
+  DockerComposeUrl="https://github.com/docker/compose/releases/download/v2.27.3/docker-compose-linux-aarch64"
 fi
 
 DockerName=$(echo $DockerUrl | awk -F '/' '{print $NF}')

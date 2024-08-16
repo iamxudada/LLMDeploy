@@ -21,7 +21,7 @@ services:
 
   valkey:
     image: 'quay.io/supiedt/valkey:v1'
-    container_name: 'lmd-redis'
+    container_name: 'lmd-valkey'
     restart: always
     env_file: .env
     ports:
@@ -68,7 +68,7 @@ services:
       - ETCD_QUOTA_BACKEND_BYTES=4294967296
       - ETCD_SNAPSHOT_COUNT=50000
     volumes:
-      - ./volumes/etcd:/etcd
+      - './volumes/etcd/data:/etcd'
     command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
 
   standalone:
@@ -80,8 +80,8 @@ services:
     security_opt:
       - seccomp:unconfined
     volumes:
-      - ./volumes/milvus/data:/var/lib/milvus
-      - ./volumes/milvus/milvus.yaml:/milvus/configs/milvus.yaml
+      - './volumes/milvus/data:/var/lib/milvus'
+      - './volumes/milvus/milvus.yaml:/milvus/configs/milvus.yaml'
     ports:
       - "30056:9091"
       - "30057:19530"
@@ -98,8 +98,8 @@ services:
       - 30058:6030
       - 30059:6041
     volumes:
-      - ./volumes/tdengine/data:/var/lib/taos
-      - ./volumes/tdengine/logs:/var/log/taos
+      - './volumes/tdengine/data:/var/lib/taos'
+      - './volumes/tdengine/logs:/var/log/taos'
 
   kkfileview:
     image: 'quay.io/supiedt/kkfileview:v1'
@@ -122,6 +122,19 @@ services:
     volumes:
       - './volumes/registry/data:/var/lib/registry'
 
+  backend:
+    image: 'quay.io/supiedt/backend:v1'
+    container_name: 'lmd-backend'
+    restart: always
+    env_file: .env
+    ports:
+      - '30081:8082'
+    volumes:
+      - '/run/docker.sock:/run/docker.sock:rw'
+      - './backend/lmd:/app/lmd'
+      - './backend/logs:/app/zzlogs'
+      - './backend/BaseModels:/app/BaseModels'
+
   frontend:
     image: 'quay.io/supiedt/frontend:v1'
     container_name: 'lmd-frontend'
@@ -131,19 +144,6 @@ services:
       - '30080:80'
     volumes:
       - './volumes/frontend/dist:/srv'
-
-  backend:
-    image: 'quay.io/supiedt/backend:v1'
-    container_name: 'lmd-backend'
-    restart: always
-    env_file: .env
-    ports:
-      - '30081:30081'
-    volumes:
-      - '/run/docker.sock:/run/docker.sock:rw'
-      - './backend/lmd:/app/lmd'
-      - './backend/logs:/app/zzlogs'
-      - './backend/BaseModels:/app/BaseModels'
 
   lmd-py:
     image: 'quay.io/supiedt/lmdpy:'
@@ -159,7 +159,6 @@ services:
   lmd-py-ngram:
     image: '39.129.20.152:30085/ascend/lmdpy:v1.0.2-ascend'
     container_name: 'lmd-py-ngram'
-    privileged: true
     restart: always
     env_file: .env
     volumes:
@@ -168,14 +167,10 @@ services:
 
   lmd-py-rerankapp:
     container_name: lmd-py-rerankapp
-    image: 39.129.20.152:30085/ascend/lmdpy-embedding-rerank:v1.2
-    privileged: true
+    image: '39.129.20.152:30085/ascend/lmdpy-embedding-rerank:v1.2'
     restart: always
     env_file: .env
-    ports:
-      - 30100:8003
     environment:
-      - TZ=Asia/Shanghai
       - DEVICES_NUMS_IDS=6
     devices:
       - /dev/davinci0:/dev/davinci0
@@ -190,17 +185,15 @@ services:
       - /dev/devmm_svm:/dev/devmm_svm
       - /dev/hisi_hdc:/dev/hisi_hdc
     volumes:
-      - ./volumes/lmd-py:/workspace
+      - './volumes/lmd-py:/workspace'
     working_dir: /workspace
     command: ["/usr/bin/start-rerank"]
 
   lmd-py-embeddingapp:
     container_name: lmd-py-embeddingapp
-    image: 39.129.20.152:30085/ascend/lmdpy-embedding-rerank:v1.2
-    privileged: true
+    image: '39.129.20.152:30085/ascend/lmdpy-embedding-rerank:v1.2'
     env_file: .env
     environment:
-      - TZ=Asia/Shanghai
       - DEVICES_NUMS_IDS=7
     devices:
       - /dev/davinci0:/dev/davinci0
@@ -215,8 +208,6 @@ services:
       - /dev/devmm_svm:/dev/devmm_svm
       - /dev/hisi_hdc:/dev/hisi_hdc
     volumes:
-      - ./volumes/lmd-py:/workspace
+      - './volumes/lmd-py:/workspace'
     working_dir: /workspace
-    ports:
-      - 30101:8004
     command: ["/bin/sh", "-c", "export LD_PRELOAD=/usr/local/lib/python3.9/dist-packages/sklearn/__check_build/../../scikit_learn.libs/libgomp-d22c30c5.so.1.0.0 && /usr/bin/start-embedding"]

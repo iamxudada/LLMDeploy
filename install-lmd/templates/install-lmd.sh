@@ -45,14 +45,16 @@ if [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml" ] && [ ! -f "${SUPUEDT_LMD_WO
     exit 1
 if
 
+if [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" ]; then
+    wget -q 
 
-if [ -d "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.gz" ]; then
-    tar -xzf ${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.gz -C ${SUPUEDT_LMD_WORKSPACE_PATH}
+
+if [ -d "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" ]; then
+    tar -xzf ${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz -C ${SUPUEDT_LMD_WORKSPACE_PATH}
 else
     docker-compose -f ${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml pull
 if
 
-# check
 for image in ${LMD_BASIC_IMAGES}; do
     is_ready=$(docker images | grep ${image})
     if [ ! -a ${is_ready} ]; then
@@ -60,5 +62,4 @@ for image in ${LMD_BASIC_IMAGES}; do
     fi
 done
 
-# start
 docker-compose -f ${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml up -d
