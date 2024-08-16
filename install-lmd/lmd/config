@@ -1,0 +1,77 @@
+TZ="Asia/Shanghai"
+
+# db
+MYSQL_ROOT_USER="root"
+MYSQL_ROOT_PASSWORD="Ukgqh8LvnrsZ8uc8DuUjI1Hj"
+MYSQL_HOST="db"
+MYSQL_PORT="3306"
+MYSQL_DATABASE=""  # 不可改变
+
+# valkey
+VALKEY_HOST="valkey"
+VALKEY_PORT="6379"
+SUPIEDT_LMD_PASSWD="Ukgqh8LvnrsZ8uc8DuUjI1Hj"
+
+# minio
+MINIO_HOST="minio"
+MINIO_PORT="9000"
+MINIO_ACCESS_KEY="minioadmin"
+MINIO_SECRET_KEY="Ukgqh8LvnrsZ8uc8DuUjI1Hj"
+MINIO_BUCKET_NAME=""  # 不可改变
+
+# clickhouse
+CLICKHOUSE_HOST="clickhouse"
+CLICKHOUSE_PORT="8123"
+CLICKHOUSE_USER="root"
+CLICKHOUSE_PASSWORD="Ukgqh8LvnrsZ8uc8DuUjI1Hj"
+CLICKHOUSE_DATABASE=""  # 不可改变
+
+# milvus
+ETCD_ENDPOINTS="etcd:2379"  # 使用默认配置时不能改变
+MINIO_ADDRESS="minio:9000"  # 使用默认配置时不能改变
+MINIO_ACCESS_KEY_ID="minioadmin"      # 该配置应该和 MINIO_ACCESS_KEY 一致
+MINIO_SECRET_ACCESS_KEY="Ukgqh8LvnrsZ8uc8DuUjI1Hj"  # 该配置应该和 MINIO_SECRET_KEY 一致
+MILVUS_HOST="milvus"
+MILVUS_PORT="19530"
+MILVUS_USER="root"
+MILVUS_PASSWORD="Ukgqh8LvnrsZ8uc8DuUjI1Hj"
+MILVUS_DATABASE=""      # 不可改变
+MILVUS_COLLECTION=""
+
+# tdengine
+TAOS_FQDN="tdengine"
+TDENGINE_HOST="tdengine"
+TDENGINE_PORT="6030"
+TDENGINE_USER="root"
+TDENGINE_PASSWORD="Ukgqh8LvnrsZ8uc8DuUjI1Hj"
+TDENGINE_DATABASE=""  # 不可改变
+
+# kkfileview
+KKFILEVIEW_HOST="kkfileview"
+KKFILEVIEW_PORT="8012"
+
+# registry
+REGISTRY_HOST="registry"
+REGISTRY_PORT="5000"
+
+# py
+SUPIEDT_LMD_PY_HOST="lmd-py"
+SUPIEDT_LMD_PY_PORT="8001"
+
+# py-ngram
+SUPIEDT_LMD_PY_NGRAM_HOST="lmd-py-ngram"
+SUPIEDT_LMD_PY_NGRAM_PORT="8002"
+
+# py-rerankapp
+SUPIEDT_LMD_PY_RERANKAPP_HOST="lmd-py-rerankapp"
+SUPIEDT_LMD_PY_RERANKAPP_PORT="8003"
+
+# py-embeddingapp
+SUPIEDT_LMD_PY_EMBEDDINGAPP_HOST="lmd-py-embeddingapp"
+SUPIEDT_LMD_PY_EMBEDDINGAPP_PORT="8004"
+
+# backend
+JAVA_API_KEY=
+
+# frontend
+BACKEND_ADDRESS="backend:8082"
