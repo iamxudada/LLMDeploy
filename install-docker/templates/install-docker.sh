@@ -49,35 +49,16 @@ chown -R root:root /tmp/lmd/docker
 yes|cp -a /tmp/lmd/docker/* /usr/bin/
 
 # 配置 systemd
-yes|cp -a /tmp/lmd/services/containerd.service /usr/lib/systemd/system/containerd.service
-yes|cp -a /tmp/lmd/services/docker.socket /usr/lib/systemd/system/docker.socket
-yes|cp -a /tmp/lmd/services/docker.service /usr/lib/systemd/system/docker.service
-
-chmod 0644 /usr/lib/systemd/system/docker.socket
+yes|cp -a /tmp/lmd/config/docker.service /usr/lib/systemd/system/docker.service
 chmod 0644 /usr/lib/systemd/system/docker.service
-chmod 0644 /usr/lib/systemd/system/containerd.service
 
 # 创建 docker 组
 groupadd -f docker
 
 # 配置 docker
 mkdir -p /etc/docker
-cat << EOF > /etc/docker/daemon.json
-{
-  "insecure-registries": ["{{ groups.master }}:30062"],
-  "data-root": "/data/Dependencies/docker",
-  "default-address-pools" : [
-    {
-      "base" : "172.17.0.0/12",
-      "size" : 12
-    },
-    {
-      "base" : "192.168.0.0/16",
-      "size" : 16
-    }
-  ]
-}
-EOF
+yes|cp -a /tmp/lmd/config/docker.json /etc/docker/daemon.json
+chmod 0644 /etc/docker/daemon.json
 
 # 配置 docker.socket 权限
 chmod 0666 /var/run/docker.sock

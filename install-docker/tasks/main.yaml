@@ -1,7 +1,7 @@
 - name: cp services
   copy:
     dest: /tmp/lmd
-    src: files/services
+    src: config
     mode: 0644
 - name: cp install-docker.sh
   template:
