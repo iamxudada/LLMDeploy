@@ -11,5 +11,6 @@ workers
 
 
 [lmd:vars]
+lmdprojectpath=/data/applications/lmd
 is_createdatalvm=false
 lvm_compositiondisks="/dev/sdb /dev/sdc"

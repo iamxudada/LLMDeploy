@@ -167,17 +167,17 @@ if [ {{ is_createdatalvm }} == "true" ]; then
     mount -a
 
     if [ -z "{{ groups.workers }}" ] && [ "{{ groups.master }}" == "$(hostname -I | awk '{print $1}')"]; then
-        mkdir -p /data/applications/lmd/backend/BaseModels
+        mkdir -p {{ lmdprojectpath }}/backend/BaseModels
         if [ !-f "/etc/exports.d/lmd.conf" ]; then
-            echo "/data/applications/lmd/backend/BaseModels *(rw,async,no_root_squash,no_subtree_check,insecure)" > /etc/exports.d/lmd.conf
+            echo "{{ lmdprojectpath }}/backend/BaseModels *(rw,async,no_root_squash,no_subtree_check,insecure)" > /etc/exports.d/lmd.conf
         fi
         exportfs -avf
     fi
 
     if [ -z "{{ groups.workers }}" ] && [ "{{ groups.workers }}" == "$(hostname -I | awk '{print $1}')"]; then
-        mkdir -p /data/applications/lmd/backend/BaseModels
-        if [ "grep /data/applications/lmd/backend/BaseModels /etc/fstab" == "" ]; then
-            echo "{{ groups.master }}:/data/applications/lmd/backend/BaseModels /data/applications/lmd/backend/BaseModels" >> /etc/fstab
+        mkdir -p {{ lmdprojectpath }}/backend/BaseModels
+        if [ "grep {{ lmdprojectpath }}/backend/BaseModels /etc/fstab" == "" ]; then
+            echo "{{ groups.master }}:{{ lmdprojectpath }}/backend/BaseModels {{ lmdprojectpath }}/backend/BaseModels" >> /etc/fstab
         fi
         mount -a
     fi

@@ -5,7 +5,7 @@
     mode: 0644
 - name: lmd compose cp
   copy:
-    dest: /data/applications/lmd
+    dest: {{ lmdprojectpath }}
     src: lmd
 - name: install driver
   shell:

@@ -28,7 +28,7 @@ GREEN='\033[32m'
 YELLOW='\033[33m'
 RESET='\033[0m'
 
-SUPUEDT_LMD_WORKSPACE_PATH="/data/applications/lmd"
+SUPUEDT_LMD_WORKSPACE_PATH="{{ lmdprojectpath }}"
 LMD_BASIC_IMAGES="db valkey minio clickhouse etcd milvus tdengine kkfileview registry frontend backend lmd-py"  # 基础镜像
 LMD_BASIC_IMAGE_VERSION="v1"
 LMD_TRAIN_IMAGE=""  # 训练镜像

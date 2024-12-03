@@ -34,7 +34,7 @@ UninstallSupiedtLmd() {
     docker network prune -f
     docker volume prune -f
     docker image prune -f
-    rm -rf /data/applications/lmd
+    rm -rf {{ lmdprojectpath }}
     echo -e "${GREEN}LMD uninstall success!${RESET}"
 }
 
@@ -114,7 +114,7 @@ UninstallDenpendency() {
     esac
 
     rm -rf /data
-    umount -l /data/applications/lmd/backend/BaseModels
+    umount -l {{ lmdprojectpath }}/backend/BaseModels
     umount -l --force /data
 
     rm -rf /etc/security/limits.d/lmd.conf

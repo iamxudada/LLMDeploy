@@ -26,6 +26,8 @@ GREEN='\033[32m'
 YELLOW='\033[33m'
 RESET='\033[0m'
 
+oldpwd=$(pwd)
+
 os_name=$(awk -F '=' '/^NAME/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
 os_architecture=$(uname -m)
 
@@ -35,11 +37,11 @@ AllowScriptDependencies() {
         "Ubuntu")
             apt-get update 
             apt-get install -y curl
-            dpkg -i install-denpend/files/sshpass_${os_architecture}.deb
+            dpkg -i ${oldpwd}/install-denpend/files/sshpass_${os_architecture}.deb
             ;;
         "EulerOS")
             yum install -y curl
-            rpm -ivh install-denpend/files/sshpass_${os_architecture}.rpm
+            rpm -ivh ${oldpwd}/install-denpend/files/sshpass_${os_architecture}.rpm
             ;;
         *)
             echo -e "${RED} Unsupported OS: ${os_name} ${RESET}"
