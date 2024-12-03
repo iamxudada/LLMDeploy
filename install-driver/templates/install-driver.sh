@@ -46,8 +46,8 @@ case "${os_architecture} ${driver_install_type}" in
     DriverDRUrl="https://gitee.com/ascend/ascend-docker-runtime/releases/download/v5.0.1-Patch1/Ascend-docker-runtime_5.0.1.1_linux-aarch64.run"
   ;;
   "aarch64 d802")
-    DriverDUrl="http://39.129.20.152:30083/api/public/dl/-g2nCsR6/Ascend/910B/Ascend-hdk-910b-npu-driver_23.0.3_linux-aarch64.run"
-    DriverFUrl="http://39.129.20.152:30083/api/public/dl/An2abR4D/Ascend/910B/Ascend-hdk-910b-npu-firmware_7.1.0.5.220.run"
+    DriverDUrl="https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/Ascend%20HDK/Ascend%20HDK%2023.0.3/Ascend-hdk-910b-npu-driver_23.0.3_linux-aarch64.run"
+    DriverFUrl="https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/Ascend%20HDK/Ascend%20HDK%2023.0.3/Ascend-hdk-910b-npu-firmware_7.1.0.5.220.run"
     DriverDRUrl="https://gitee.com/ascend/ascend-docker-runtime/releases/download/v5.0.1-Patch1/Ascend-docker-runtime_5.0.1.1_linux-aarch64.run"
   ;;
   *)
