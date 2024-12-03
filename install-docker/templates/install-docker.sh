@@ -18,6 +18,8 @@
 # along with LMD.  If not, see <http://www.gnu.org/licenses/>.
 #==============================================================================
 
+set -e
+
 export TMOUT=0
 umask 022
 
@@ -35,15 +37,15 @@ elif [[ $(uname -m) = 'aarch64' ]]; then
   DockerComposeUrl="https://github.com/docker/compose/releases/download/v2.27.3/docker-compose-linux-aarch64"
 fi
 
-DockerName=$(echo $DockerUrl | awk -F '/' '{print $NF}')
+DockerName=$(echo ${DockerUrl} | awk -F '/' '{print $NF}')
 DockerComposeName=$(echo $DockerComposeUrl | awk -F '/' '{print $NF}')
 
-download $DockerUrl "/tmp/lmd/$DockerName"
-download $DockerComposeUrl "/tmp/lmd/$DockerComposeName"
+download ${DockerUrl} "/tmp/lmd/${DockerName}"
+download ${DockerComposeUrl} "/tmp/lmd/${DockerComposeName}"
 
 # 安装
-tar -xvf /tmp/lmd/$DockerName -C /tmp/lmd/
-yes|cp -a /tmp/lmd/$DockerComposeName /tmp/lmd/docker/docker-compose
+tar -xvf /tmp/lmd/${DockerName} -C /tmp/lmd/
+yes|cp -a /tmp/lmd/${DockerComposeName} /tmp/lmd/docker/docker-compose
 chmod -R 0755 /tmp/lmd/docker
 chown -R root:root /tmp/lmd/docker
 yes|cp -a /tmp/lmd/docker/* /usr/bin/
@@ -78,7 +80,7 @@ download() {
     local path=$2
 
     for ((i=1; i<=max_retries; i++)); do
-        echo "Attempt $i of $max_retries..."
+        echo "Attempt $i of ${max_retries}..."
         curl -fsSL -o "${path}" "${url}"
         if [[ $? -eq 0 ]]; then
             return 0

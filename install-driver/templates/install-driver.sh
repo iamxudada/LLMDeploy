@@ -18,6 +18,9 @@
 # along with LMD.  If not, see <http://www.gnu.org/licenses/>.
 #==============================================================================
 
+set -e
+
+
 export TMOUT=0
 umask 022
 

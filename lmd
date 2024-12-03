@@ -110,15 +110,15 @@ uninstall() {
 
 clear() {
 
-    case "$os_name" in
+    case "${os_name}" in
         "Ubuntu")
-            dpkg -P sshpass_$os_architecture.deb
+            dpkg -P sshpass_${os_architecture}.deb
             ;;
         "EulerOS")
-            rpm -e sshpass_$os_architecture.rpm
+            rpm -e sshpass_${os_architecture}.rpm
             ;;
         *)
-            echo -e "${RED} Unsupported OS: $os_name ${RESET}"
+            echo -e "${RED} Unsupported OS: ${os_name} ${RESET}"
             exit 1
             ;;
     esac
@@ -164,7 +164,7 @@ main() {
         clear)
             echo -e "${YELLOW}是否已经阅读过 README.md 文件？[yY/nN] ${RESET}"
             read choice
-            case "$choice" in
+            case "${choice}" in
                 y|Y )
                     clear
                     ;;
