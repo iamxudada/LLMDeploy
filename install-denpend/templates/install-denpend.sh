@@ -31,7 +31,7 @@ os_name=$(awk -F '=' '/^NAME/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=
 os_version=$(awk -F '=' '/^VERSION_ID/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
 os_architecture=$(uname -m)
 
-case "$os_name $os_version" in
+case "${os_name} ${os_version}" in
     "Ubuntu 18.04")
         mv -f /etc/apt/sources.list /etc/apt/sources.list.bak
         cp /tmp/lmd/repo/Ubuntu-18.04.repo /etc/apt/sources.list
@@ -180,3 +180,5 @@ if [ {{ is_createdatalvm }} == "true" ]; then
         mount -a
     fi
 fi
+
+

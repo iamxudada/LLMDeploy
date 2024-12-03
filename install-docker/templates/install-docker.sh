@@ -38,8 +38,8 @@ fi
 DockerName=$(echo $DockerUrl | awk -F '/' '{print $NF}')
 DockerComposeName=$(echo $DockerComposeUrl | awk -F '/' '{print $NF}')
 
-wget -c -q -O /tmp/lmd/$DockerName $DockerUrl
-wget -c -q -O /tmp/lmd/$DockerComposeName $DockerComposeUrl
+download $DockerUrl "/tmp/lmd/$DockerName"
+download $DockerComposeUrl "/tmp/lmd/$DockerComposeName"
 
 # 安装
 tar -xvf /tmp/lmd/$DockerName -C /tmp/lmd/
@@ -49,15 +49,17 @@ chown -R root:root /tmp/lmd/docker
 yes|cp -a /tmp/lmd/docker/* /usr/bin/
 
 # 配置 systemd
+yes | cp -a /tmp/lmd/config/containerd.service /usr/lib/systemd/system/containerd.service
+yes|cp -a /tmp/lmd/config/docker.socket /usr/lib/systemd/system/docker.socket
 yes|cp -a /tmp/lmd/config/docker.service /usr/lib/systemd/system/docker.service
-chmod 0644 /usr/lib/systemd/system/docker.service
+chmod 0644 /usr/lib/systemd/system/{containerd.service,docker.socket,docker.service}
 
 # 创建 docker 组
 groupadd -f docker
 
 # 配置 docker
 mkdir -p /etc/docker
-yes|cp -a /tmp/lmd/config/docker.json /etc/docker/daemon.json
+yes|cp -a /tmp/lmd/config/daemon.json /etc/docker/daemon.json
 chmod 0644 /etc/docker/daemon.json
 
 # 配置 docker.socket 权限
@@ -65,3 +67,27 @@ chmod 0666 /var/run/docker.sock
 
 # 刷新
 systemctl daemon-reload
+
+
+download() {
+    set +e
+
+    local max_retries=10
+    local retry_delay=10
+    local url=$1
+    local path=$2
+
+    for ((i=1; i<=max_retries; i++)); do
+        echo "Attempt $i of $max_retries..."
+        curl -fsSL -o "${path}" "${url}"
+        if [[ $? -eq 0 ]]; then
+            return 0
+        else
+            echo "Download failed with error code $?. Retrying in ${retry_delay} seconds..."
+            sleep ${retry_delay}
+        fi
+    done
+
+    echo "All attempts failed. Exiting."
+    return 1
+}

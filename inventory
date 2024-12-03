@@ -11,5 +11,5 @@ workers
 
 
 [lmd:vars]
-is_createdatalvm=true
+is_createdatalvm=false
 lvm_compositiondisks="/dev/sdb /dev/sdc"

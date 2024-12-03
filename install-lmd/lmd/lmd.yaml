@@ -94,6 +94,7 @@ services:
     container_name: 'lmd-tdengine'
     restart: always
     env_file: config
+    privileged: true
     ports:
       - 30058:6030
       - 30059:6041
