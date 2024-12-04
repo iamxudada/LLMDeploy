@@ -26,7 +26,6 @@ GREEN='\033[32m'
 YELLOW='\033[33m'
 RESET='\033[0m'
 
-# Logging functions
 log_info() {
     printf "${GREEN}[INFO]${RESET} %s\n" "$1"
 }
@@ -39,13 +38,11 @@ log_error() {
     printf "${RED}[ERROR]${RESET} %s\n" "$1" >&2
 }
 
-# Store initial working directory
 readonly OLDPWD=$(pwd)
 readonly OS_NAME=$(awk -F '=' '/^NAME/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
 readonly OS_ARCH=$(uname -m)
 readonly CONDA_PATH="/tmp/lmd/miniconda"
 
-# Helper function to check command status
 check_cmd() {
     if ! "$@"; then
         log_error "Command failed: $*"
@@ -53,7 +50,6 @@ check_cmd() {
     fi
 }
 
-# Cleanup function
 cleanup() {
     if [ -d "/tmp/lmd" ]; then
         rm -rf "/tmp/lmd"
@@ -63,7 +59,6 @@ cleanup() {
     fi
 }
 
-# Set trap for cleanup
 trap cleanup EXIT
 
 AllowScriptDependencies() {
@@ -85,7 +80,6 @@ AllowScriptDependencies() {
             ;;
     esac
 
-    # Install Miniconda
     local conda_url="https://mirror.nju.edu.cn/anaconda/miniconda/Miniconda3-py310_24.5.0-0-Linux-${OS_ARCH}.sh"
     local conda_installer="/tmp/miniconda.sh"
     
@@ -101,7 +95,6 @@ AllowScriptDependencies() {
         exit 1
     fi
 
-    # Install Ansible
     log_info "Installing Ansible..."
     check_cmd "${CONDA_PATH}/bin/python3.10" -m pip config set global.index-url https://mirror.nju.edu.cn/pypi/web/simple
     check_cmd "${CONDA_PATH}/bin/python3.10" -m pip install --upgrade --no-cache-dir ansible
@@ -168,7 +161,6 @@ install() {
     ScriptConfigurationDependency
     AllowScriptDependencies
 
-    # Verify installations
     if ! "${CONDA_PATH}/bin/python3.10" -m pip --version; then
         log_error "pip is not available. Please check Miniconda installation"
         exit 1
@@ -179,7 +171,6 @@ install() {
         exit 1
     fi
 
-    # Run playbook
     log_info "Running installation playbook..."
     if ! "${CONDA_PATH}/bin/ansible-playbook" lmd-install.yaml; then
         log_error "Installation failed. Please check logs"
@@ -219,12 +210,9 @@ clear() {
             ;;
     esac
 
-    # Clean up directories and files
     if [ -d "/tmp/lmd" ]; then
-        rm -rf "/tmp/lmd" || log_warn "Failed to remove /tmp/lmd"
+        rm -rf "/tmp/lmd"
     fi
-
-    rm -rf ./* || log_warn "Failed to remove some files"
 
     log_info "Cleanup completed successfully"
 }
