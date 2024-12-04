@@ -23,13 +23,11 @@ set -e
 export TMOUT=0
 umask 022
 
-# Color definitions
 RED='\033[31m'
 GREEN='\033[32m'
 YELLOW='\033[33m'
 RESET='\033[0m'
 
-# Log functions
 log_info() {
     printf "${GREEN}[INFO]${RESET} %s\n" "$1"
 }
@@ -42,70 +40,162 @@ log_error() {
     printf "${RED}[ERROR]${RESET} %s\n" "$1" >&2
 }
 
-# Configuration
-SUPUEDT_LMD_WORKSPACE_PATH="{{ lmdprojectpath }}"
-LMD_BASIC_IMAGES="db valkey minio clickhouse etcd milvus tdengine kkfileview registry frontend backend lmd-py"
-LMD_BASIC_IMAGE_VERSION="v1"
-LMD_TRAIN_IMAGE=""
-LMD_FS_MW_IMAGE=""
-LMD_FS_AC_IMAGE=""
-LMD_VLLM_IMAGE=""
+readonly SUPUEDT_LMD_WORKSPACE_PATH="{{ lmdprojectpath }}"
+readonly LMD_BASIC_IMAGES="db valkey minio clickhouse etcd milvus tdengine kkfileview registry frontend backend lmd-py"
+readonly LMD_BASIC_IMAGE_VERSION="v1"
+readonly LMD_VOLUME_URL="YOUR_DOWNLOAD_URL"
+readonly DOCKER_REGISTRY="quay.io/supiedt"
+readonly LMD_TRAIN_IMAGE=""
+readonly LMD_FS_MW_IMAGE=""
+readonly LMD_FS_AC_IMAGE=""
+readonly LMD_VLLM_IMAGE=""
 
-# Create workspace directory if it doesn't exist
-if [ ! -d "${SUPUEDT_LMD_WORKSPACE_PATH}" ]; then
-    mkdir -p "${SUPUEDT_LMD_WORKSPACE_PATH}" || {
-        log_error "Failed to create workspace directory: ${SUPUEDT_LMD_WORKSPACE_PATH}"
-        exit 1
-    }
-fi
+check_prerequisites() {
+    log_info "Checking prerequisites..."
 
-# Check for required files
-if [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml" ] || [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/.env" ]; then
-    log_error "Required project startup files not found"
-    exit 1
-fi
+    if ! command -v docker &>/dev/null; then
+        log_error "Docker is not installed"
+        return 1
+    fi
 
-# Download and extract volume data if needed
-if [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" ]; then
-    log_info "Downloading lmd-volume.tar.xz..."
-    wget -q --show-progress --tries=3 --timeout=60 "YOUR_DOWNLOAD_URL" -O "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" || {
-        log_error "Failed to download lmd-volume.tar.xz"
-        exit 1
-    }
-fi
+    if ! command -v docker-compose &>/dev/null; then
+        log_error "Docker Compose is not installed"
+        return 1
 
-# Extract volume data
-if [ -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" ]; then
+    if ! command -v wget &>/dev/null; then
+        log_error "wget is not installed"
+        return 1
+    
+    return 0
+}
+
+setup_workspace() {
+    log_info "Setting up workspace..."
+    
+    if [ ! -d "${SUPUEDT_LMD_WORKSPACE_PATH}" ]; then
+        mkdir -p "${SUPUEDT_LMD_WORKSPACE_PATH}" || {
+            log_error "Failed to create workspace directory: ${SUPUEDT_LMD_WORKSPACE_PATH}"
+            return 1
+        }
+    fi
+
+    local required_files=("lmd.yaml" ".env")
+    for file in "${required_files[@]}"; do
+        if [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/${file}" ]; then
+            log_error "Required file not found: ${file}"
+            return 1
+        fi
+    done
+    
+    return 0
+}
+
+download_volume_data() {
+    local volume_file="${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz"
+    
+    if [ ! -f "${volume_file}" ]; then
+        log_info "Downloading lmd-volume.tar.xz..."
+        wget -q --show-progress --tries=3 --timeout=60 "${LMD_VOLUME_URL}" -O "${volume_file}" || {
+            log_error "Failed to download lmd-volume.tar.xz"
+            return 1
+        }
+    else
+        log_info "Volume data file already exists, skipping download"
+    fi
+    
     log_info "Extracting volume data..."
-    tar -xf "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" -C "${SUPUEDT_LMD_WORKSPACE_PATH}" || {
+    tar -xf "${volume_file}" -C "${SUPUEDT_LMD_WORKSPACE_PATH}" || {
         log_error "Failed to extract volume data"
-        exit 1
+        return 1
     }
-else
-    log_info "Pulling docker images..."
-    docker-compose -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml" pull || {
-        log_error "Failed to pull docker images"
-        exit 1
-    }
-fi
+    
+    return 0
+}
 
-# Pull required images
-log_info "Checking and pulling basic images..."
-for image in ${LMD_BASIC_IMAGES}; do
-    if ! docker images "quay.io/supiedt/${image}:${LMD_BASIC_IMAGE_VERSION}" --format "{{.Repository}}" | grep -q "${image}"; then
-        log_info "Pulling image: ${image}"
-        docker pull "quay.io/supiedt/${image}:${LMD_BASIC_IMAGE_VERSION}" || {
-            log_error "Failed to pull image: ${image}"
+pull_docker_images() {
+    log_info "Checking and pulling basic images..."
+    
+    local failed_images=()
+    for image in ${LMD_BASIC_IMAGES}; do
+        local full_image="${DOCKER_REGISTRY}/${image}:${LMD_BASIC_IMAGE_VERSION}"
+        
+        if ! docker images "${full_image}" --format "{{.Repository}}" | grep -q "${image}"; then
+            log_info "Pulling image: ${image}"
+            if ! docker pull "${full_image}"; then
+                log_warn "Failed to pull image: ${image}"
+                failed_images+=("${image}")
+            fi
+        else
+            log_info "Image already exists: ${image}"
+        fi
+    done
+    
+    if [ ${#failed_images[@]} -gt 0 ]; then
+        log_error "Failed to pull the following images: ${failed_images[*]}"
+        return 1
+    fi
+    
+    return 0
+}
+
+start_services() {
+    log_info "Starting services..."
+    
+    local compose_file="${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml"
+
+    if ! docker-compose -f "${compose_file}" config >/dev/null; then
+        log_error "Invalid docker-compose configuration"
+        return 1
+    fi
+    
+    if ! docker-compose -f "${compose_file}" up -d; then
+        log_error "Failed to start services"
+        return 1
+    fi
+    
+    local services
+    services=$(docker-compose -f "${compose_file}" ps --services)
+    for service in ${services}; do
+        if ! docker-compose -f "${compose_file}" ps "${service}" | grep -q "Up"; then
+            log_error "Service failed to start: ${service}"
+            return 1
+        fi
+    done
+    
+    return 0
+}
+
+cleanup() {
+    if [ $? -ne 0 ]; then
+        log_warn "Installation failed, cleaning up..."
+        docker-compose -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml" down || log_warn "Failed to stop services"
+        rm -rf "${SUPUEDT_LMD_WORKSPACE_PATH}"
+    fi
+}
+
+main() {
+    trap cleanup EXIT
+    
+    log_info "Starting LMD installation..."
+    
+    check_prerequisites || exit 1
+    
+    setup_workspace || exit 1
+    
+    if [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" ]; then
+        download_volume_data || exit 1
+    else
+        docker-compose -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml" pull || {
+            log_error "Failed to pull docker images"
             exit 1
         }
     fi
-done
-
-# Start services
-log_info "Starting services..."
-docker-compose -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml" up -d || {
-    log_error "Failed to start services"
-    exit 1
+    
+    pull_docker_images || exit 1
+    
+    start_services || exit 1
+    
+    log_info "Installation completed successfully"
 }
 
-log_info "Installation completed successfully"
+main

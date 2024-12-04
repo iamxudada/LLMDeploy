@@ -20,7 +20,6 @@
 
 set -e
 
-
 export TMOUT=0
 umask 022
 

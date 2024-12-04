@@ -26,139 +26,207 @@ GREEN='\033[32m'
 YELLOW='\033[33m'
 RESET='\033[0m'
 
-oldpwd=$(pwd)
+# Logging functions
+log_info() {
+    printf "${GREEN}[INFO]${RESET} %s\n" "$1"
+}
 
-os_name=$(awk -F '=' '/^NAME/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
-os_architecture=$(uname -m)
+log_warn() {
+    printf "${YELLOW}[WARN]${RESET} %s\n" "$1"
+}
+
+log_error() {
+    printf "${RED}[ERROR]${RESET} %s\n" "$1" >&2
+}
+
+# Store initial working directory
+readonly OLDPWD=$(pwd)
+readonly OS_NAME=$(awk -F '=' '/^NAME/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
+readonly OS_ARCH=$(uname -m)
+readonly CONDA_PATH="/tmp/lmd/miniconda"
+
+# Helper function to check command status
+check_cmd() {
+    if ! "$@"; then
+        log_error "Command failed: $*"
+        return 1
+    fi
+}
+
+# Cleanup function
+cleanup() {
+    if [ -d "/tmp/lmd" ]; then
+        rm -rf "/tmp/lmd"
+    fi
+    if [ -f "/tmp/miniconda.sh" ]; then
+        rm -f "/tmp/miniconda.sh"
+    fi
+}
+
+# Set trap for cleanup
+trap cleanup EXIT
 
 AllowScriptDependencies() {
-
-    case "${os_name}" in
+    log_info "Installing script dependencies..."
+    
+    case "${OS_NAME}" in
         "Ubuntu")
-            apt-get update 
-            apt-get install -y curl
-            dpkg -i ${oldpwd}/install-denpend/files/sshpass_${os_architecture}.deb
+            check_cmd apt-get update
+            check_cmd apt-get install -y curl
+            check_cmd dpkg -i "${OLDPWD}/install-denpend/files/sshpass_${OS_ARCH}.deb"
             ;;
         "EulerOS")
-            yum install -y curl
-            rpm -ivh ${oldpwd}/install-denpend/files/sshpass_${os_architecture}.rpm
+            check_cmd yum install -y curl
+            check_cmd rpm -ivh "${OLDPWD}/install-denpend/files/sshpass_${OS_ARCH}.rpm"
             ;;
         *)
-            echo -e "${RED} Unsupported OS: ${os_name} ${RESET}"
+            log_error "Unsupported OS: ${OS_NAME}"
             exit 1
             ;;
     esac
 
-    # 安装 miniconda
-    condaURL="https://mirror.nju.edu.cn/anaconda/miniconda/Miniconda3-py310_24.5.0-0-Linux-${os_architecture}.sh"
-    condaName="/tmp/miniconda.sh"
-    download "${condaURL}" "${condaName}"
-    yes|bash /tmp/miniconda.sh -b -u -p /tmp/lmd/miniconda
+    # Install Miniconda
+    local conda_url="https://mirror.nju.edu.cn/anaconda/miniconda/Miniconda3-py310_24.5.0-0-Linux-${OS_ARCH}.sh"
+    local conda_installer="/tmp/miniconda.sh"
+    
+    log_info "Downloading Miniconda..."
+    if ! download "${conda_url}" "${conda_installer}"; then
+        log_error "Failed to download Miniconda"
+        exit 1
+    fi
 
-    # 安装 ansible
-    /tmp/lmd/miniconda/bin/python3.10 -m pip config set global.index-url https://mirror.nju.edu.cn/pypi/web/simple
-    /tmp/lmd/miniconda/bin/python3.10 -m pip install --upgrade --no-cache-dir ansible
+    log_info "Installing Miniconda..."
+    if ! bash "${conda_installer}" -b -u -p "${CONDA_PATH}"; then
+        log_error "Failed to install Miniconda"
+        exit 1
+    fi
+
+    # Install Ansible
+    log_info "Installing Ansible..."
+    check_cmd "${CONDA_PATH}/bin/python3.10" -m pip config set global.index-url https://mirror.nju.edu.cn/pypi/web/simple
+    check_cmd "${CONDA_PATH}/bin/python3.10" -m pip install --upgrade --no-cache-dir ansible
 }
 
-
 ScriptConfigurationDependency() {
-    if [ ! -f ./inventory ]; then
-        echo "inventory file not found"
-        exit 1
-    fi
-
-    if [ ! -f ./ansible.cfg ]; then
-        echo "ansible.cfg file not found"
-        exit 1
-    fi
+    local required_files=("inventory" "ansible.cfg")
+    
+    for file in "${required_files[@]}"; do
+        if [ ! -f "./${file}" ]; then
+            log_error "${file} file not found"
+            exit 1
+        fi
+    done
 }
 
 download() {
     set +e
-
+    local url="$1"
+    local path="$2"
     local max_retries=10
     local retry_delay=10
-    local url=$1
-    local path=$2
+    local attempt=1
 
-    for ((i=1; i<=max_retries; i++)); do
-        echo "Attempt $i of $max_retries at $(date)..."
-        curl --max-time 30 -fsSL -o "${path}" "${url}"
-        if [[ $? -eq 0 ]]; then
+    while [ $attempt -le $max_retries ]; do
+        log_info "Download attempt $attempt of $max_retries..."
+        if curl --max-time 30 -fsSL -o "${path}" "${url}"; then
+            log_info "Download successful"
+            set -e
             return 0
-        else
-            echo "Download failed with error code $?. Retrying in ${retry_delay} seconds..."
-            sleep ${retry_delay}
         fi
+        
+        log_warn "Download failed. Retrying in ${retry_delay} seconds..."
+        sleep "${retry_delay}"
+        ((attempt++))
     done
 
-    echo "All attempts failed. Exiting."
+    log_error "Download failed after ${max_retries} attempts"
+    set -e
     return 1
 }
 
-
 confirm_action() {
-    echo -e "${YELLOW}是否已经阅读过 README.md 文件？[yY/nN] ${RESET}"
-    read choice
-    case "${choice}" in
-        y|Y )
-            return 0
-            ;;
-        * )
-            echo -e "${RED}请注意在执行该脚本之前，请先阅读 README.md 文件 ${RESET}"
-            return 1
-            ;;
-    esac
+    while true; do
+        log_warn "Have you read the README.md file? [y/N]"
+        read -r choice
+        case "${choice}" in
+            [yY])
+                return 0
+                ;;
+            [nN]|"")
+                log_error "Please read README.md before proceeding"
+                return 1
+                ;;
+            *)
+                log_warn "Invalid input. Please enter 'y' or 'n'"
+                ;;
+        esac
+    done
 }
 
 install() {
+    log_info "Starting installation..."
     ScriptConfigurationDependency
     AllowScriptDependencies
-    /tmp/lmd/miniconda/bin/python3.10 -m pip --version || {
-        echo -e "${RED}pip 不可用，请检查 Miniconda 安装。${RESET}"
+
+    # Verify installations
+    if ! "${CONDA_PATH}/bin/python3.10" -m pip --version; then
+        log_error "pip is not available. Please check Miniconda installation"
         exit 1
-    }
-    /tmp/lmd/miniconda/bin/ansible-playbook lmd-install.yaml || {
-        echo -e "${RED}安装失败，请检查日志。${RESET}"
+    fi
+
+    if ! "${CONDA_PATH}/bin/ansible" --version; then
+        log_error "Ansible installation verification failed"
         exit 1
-    }
-    /tmp/lmd/miniconda/bin/ansible --version || {
-        echo -e "${RED}Ansible 安装验证失败。${RESET}"
+    fi
+
+    # Run playbook
+    log_info "Running installation playbook..."
+    if ! "${CONDA_PATH}/bin/ansible-playbook" lmd-install.yaml; then
+        log_error "Installation failed. Please check logs"
         exit 1
-    }
+    fi
+
+    log_info "Installation completed successfully"
 }
 
 uninstall() {
+    log_info "Starting uninstallation..."
     ScriptConfigurationDependency
     AllowScriptDependencies
-    /tmp/lmd/miniconda/bin/ansible-playbook lmd-uninstall.yaml || {
-        echo -e "${RED}卸载失败，请检查日志。${RESET}"
+
+    log_info "Running uninstallation playbook..."
+    if ! "${CONDA_PATH}/bin/ansible-playbook" lmd-uninstall.yaml; then
+        log_error "Uninstallation failed. Please check logs"
         exit 1
-    }
+    fi
+
+    log_info "Uninstallation completed successfully"
 }
 
 clear() {
+    log_info "Starting cleanup..."
 
-    case "${os_name}" in
+    case "${OS_NAME}" in
         "Ubuntu")
-            dpkg -P sshpass_${os_architecture}.deb
+            dpkg -P "sshpass_${OS_ARCH}" 2>/dev/null || log_warn "Failed to remove sshpass package"
             ;;
         "EulerOS")
-            rpm -e sshpass_${os_architecture}.rpm
+            rpm -e "sshpass" 2>/dev/null || log_warn "Failed to remove sshpass package"
             ;;
         *)
-            echo -e "${RED} Unsupported OS: ${os_name} ${RESET}"
+            log_error "Unsupported OS: ${OS_NAME}"
             exit 1
             ;;
     esac
 
-    if [ -d /tmp/lmd ]; then
-        rm -rf /tmp/lmd
+    # Clean up directories and files
+    if [ -d "/tmp/lmd" ]; then
+        rm -rf "/tmp/lmd" || log_warn "Failed to remove /tmp/lmd"
     fi
 
-    rm -rf ./*
+    rm -rf ./* || log_warn "Failed to remove some files"
 
-    echo -e "${GREEN}LMD clear success!${RESET}"
+    log_info "Cleanup completed successfully"
 }
 
 main() {
@@ -173,8 +241,8 @@ main() {
             confirm_action && clear
             ;;
         *)
-            echo -e "${RED}请注意在执行该脚本之前，请先阅读 README.md 文件 ${RESET}\n"
-            echo -e "${RED}Usage: $0 {install|uninstall|clear} ${RESET}"
+            log_error "Usage: $0 {install|uninstall|clear}"
+            log_error "Please read README.md before proceeding"
             exit 1
             ;;
     esac
