@@ -20,127 +20,189 @@
 
 set -e
 
-
 export TMOUT=0
 umask 022
 
+# Color definitions
 RED='\033[31m'
 GREEN='\033[32m'
 YELLOW='\033[33m'
 RESET='\033[0m'
 
+# Logging functions
+log_info() {
+    printf "${GREEN}[INFO]${RESET} %s\n" "$1"
+}
+
+log_warn() {
+    printf "${YELLOW}[WARN]${RESET} %s\n" "$1"
+}
+
+log_error() {
+    printf "${RED}[ERROR]${RESET} %s\n" "$1" >&2
+}
+
+# Helper function to safely remove files/directories
+safe_remove() {
+    local path="$1"
+    if [ -e "$path" ]; then
+        rm -rf "$path" || log_warn "Failed to remove: $path"
+    fi
+}
+
+# Helper function to run uninstall scripts
+run_uninstall_script() {
+    local script_path="$1"
+    local component="$2"
+    if [ -f "$script_path" ]; then
+        log_info "Uninstalling $component..."
+        bash "$script_path" || log_warn "Failed to run uninstall script for $component"
+    else
+        log_warn "$component uninstall script not found, removing directory"
+        safe_remove "$(dirname "$script_path")"
+    fi
+}
+
 UninstallSupiedtLmd() {
-    docker ps -a -q | xargs docker rm -f
-    docker network prune -f
-    docker volume prune -f
-    docker image prune -f
-    rm -rf {{ lmdprojectpath }}
-    echo -e "${GREEN}LMD uninstall success!${RESET}"
+    log_info "Uninstalling LMD components..."
+    docker ps -a -q | xargs -r docker rm -f 2>/dev/null || log_warn "Failed to remove some containers"
+    docker network prune -f || log_warn "Failed to prune networks"
+    docker volume prune -f || log_warn "Failed to prune volumes"
+    docker image prune -f || log_warn "Failed to prune images"
+    safe_remove "{{ lmdprojectpath }}"
+    log_info "LMD uninstall completed"
 }
 
 UninstallDriver() {
-    if [ -d "/usr/local/Ascend/Ascend-Docker-Runtime" ]; then
-        if [ -f "/usr/local/Ascend/Ascend-Docker-Runtime/script/uninstall.sh"]; then
-            bash /usr/local/Ascend/Ascend-Docker-Runtime/script/uninstall.sh
-        else
-            rm -rf /usr/local/Ascend/Ascend-Docker-Runtime
-        fi
-    else
-        echo -e "${YELLOW}Ascend-Docker-Runtime PATH not found!$ {RESET}"
-    fi
-
-    if [ -d "/usr/local/Ascend/firmware/" ]; then
-        if [ -f "/usr/local/Ascend/firmware/script/uninstall.sh" ]; then
-            bash /usr/local/Ascend/firmware/script/uninstall.sh
-        else
-            rm -rf /usr/local/Ascend/firmware
-        fi
-    else
-        echo -e "${YELLOW}Firmware PATH not found!$ {RESET}"
-    fi
-
-    if [ -d "/usr/local/Ascend/driver" ]; then
-        if [ -f "/usr/local/Ascend/driver/script/run_driver_uninstall.sh" ]; then
-            bash /usr/local/Ascend/driver/script/run_driver_uninstall.sh
-        else
-            rm -rf /usr/local/Ascend/driver
-        fi
-    else
-        echo -e "${YELLOW}Driver PATH not found!$ {RESET}"
-    fi
+    log_info "Uninstalling drivers..."
+    
+    # Ascend Docker Runtime
+    run_uninstall_script "/usr/local/Ascend/Ascend-Docker-Runtime/script/uninstall.sh" "Ascend-Docker-Runtime"
+    
+    # Firmware
+    run_uninstall_script "/usr/local/Ascend/firmware/script/uninstall.sh" "Firmware"
+    
+    # Driver
+    run_uninstall_script "/usr/local/Ascend/driver/script/run_driver_uninstall.sh" "Driver"
+    
+    log_info "Driver uninstall completed"
 }
 
 UninstallDocker() {
-    systemctl stop -f docker
-    systemctl disable docker
-    rm -rf /usr/lib/systemd/system/docker.service
-    rm -rf /usr/lib/systemd/system/docker.socket
-    rm -rf /usr/lib/systemd/system/containerd.service
-    rm -rf /usr/bin/{containerd,containerd-shim,containerd-shim-runc-v2,docker-compose,docker-proxy,dockerd,docker,ctr,docker-init,runc}
-    rm -rf /etc/docker
-    rm -rf /data/Dependencies/docker
-    groupdel -f docker
-    echo -e "${GREEN}Docker uninstall success!${RESET}"
+    log_info "Uninstalling Docker..."
+    
+    # Stop and disable services
+    systemctl stop docker || log_warn "Failed to stop docker service"
+    systemctl disable docker || log_warn "Failed to disable docker service"
+    
+    # Remove systemd files
+    local systemd_files=(
+        "/usr/lib/systemd/system/docker.service"
+        "/usr/lib/systemd/system/docker.socket"
+        "/usr/lib/systemd/system/containerd.service"
+    )
+    for file in "${systemd_files[@]}"; do
+        safe_remove "$file"
+    done
+    
+    # Remove binaries
+    local binaries=(
+        "containerd" "containerd-shim" "containerd-shim-runc-v2"
+        "docker-compose" "docker-proxy" "dockerd" "docker"
+        "ctr" "docker-init" "runc"
+    )
+    for bin in "${binaries[@]}"; do
+        safe_remove "/usr/bin/$bin"
+    done
+    
+    # Remove directories
+    safe_remove "/etc/docker"
+    safe_remove "/data/Dependencies/docker"
+    
+    # Remove docker group
+    groupdel -f docker 2>/dev/null || log_warn "Failed to remove docker group"
+    
+    log_info "Docker uninstall completed"
 }
 
-UninstallDenpendency() {
-    data_blkid=$(blkid -s UUID -o value /dev/vg-lmd/data)
-    sed -i "/$data_blkid/d" /etc/fstab
+UninstallDependency() {
+    log_info "Uninstalling dependencies..."
+    
+    # Update fstab
+    local data_blkid
+    data_blkid=$(blkid -s UUID -o value /dev/vg-lmd/data) || log_warn "Failed to get UUID for /dev/vg-lmd/data"
+    if [ -n "$data_blkid" ]; then
+        sed -i "/$data_blkid/d" /etc/fstab
+    fi
     sed -i "/{{ groups.master }}/d" /etc/hosts
-
+    
+    # OS-specific package removal
+    local os_name
     os_name=$(awk -F '=' '/^NAME/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
     case "$os_name" in
         "Ubuntu")
-            system stop -f nfs-kernel-server
-            apt-get remove --purge -y nfs-kernel-server nfs-common
+            systemctl stop nfs-kernel-server || log_warn "Failed to stop NFS server"
+            apt-get remove --purge -y nfs-kernel-server nfs-common || log_warn "Failed to remove NFS packages"
             apt-get autoremove -y
             apt-get clean
-            rm -rf /etc/apt/sources.list
-            mv -f /etc/apt/sources.list.bak /etc/apt/sources.list
+            if [ -f "/etc/apt/sources.list.bak" ]; then
+                mv -f /etc/apt/sources.list.bak /etc/apt/sources.list
+            fi
             ;;
         "EulerOS")
-            systemctl stop -f rpcbind
-            systemctl stop -f nfs-server
-            dnf remove -y nfs-utils rpcbind
+            systemctl stop rpcbind nfs-server || log_warn "Failed to stop NFS services"
+            dnf remove -y nfs-utils rpcbind || log_warn "Failed to remove NFS packages"
             dnf autoremove -y
-            dnf clean
-            rm -rf /etc/yum.repos.d/EulerOS.repo
-            mv -f /etc/yum.repos.d/EulerOS.repo.bak /etc/yum.repos.d/EulerOS.repo
+            dnf clean all
+            if [ -f "/etc/yum.repos.d/EulerOS.repo.bak" ]; then
+                mv -f /etc/yum.repos.d/EulerOS.repo.bak /etc/yum.repos.d/EulerOS.repo
+            fi
             ;;
         *)
-            echo -e "${RED}Unsupported OS: $os_name ${RESET}"
+            log_error "Unsupported OS: $os_name"
             exit 1
             ;;
     esac
-
-    rm -rf /data
-    umount -l {{ lmdprojectpath }}/backend/BaseModels
-    umount -l --force /data
-
-    rm -rf /etc/security/limits.d/lmd.conf
-    rm -rf /etc/sysctl.d/lmd.conf
-
-    userdel -f HwHiAiUser
-
-    # 拆散 lvm
-    vgremove -ff lmd
-    pvremove -ff /dev/vg-lmd/data
-    rm -rf /dev/vg-lmd
-
-    echo -e "${GREEN}Uninstall dependency success!${RESET}"
-
+    
+    # Unmount and remove directories
+    umount -l "{{ lmdprojectpath }}/backend/BaseModels" 2>/dev/null || log_warn "Failed to unmount BaseModels"
+    umount -l --force /data 2>/dev/null || log_warn "Failed to unmount /data"
+    safe_remove "/data"
+    
+    # Remove configuration files
+    safe_remove "/etc/security/limits.d/lmd.conf"
+    safe_remove "/etc/sysctl.d/lmd.conf"
+    
+    # Remove user
+    userdel -f HwHiAiUser 2>/dev/null || log_warn "Failed to remove HwHiAiUser"
+    
+    # Remove LVM
+    vgremove -ff lmd 2>/dev/null || log_warn "Failed to remove volume group"
+    pvremove -ff /dev/vg-lmd/data 2>/dev/null || log_warn "Failed to remove physical volume"
+    safe_remove "/dev/vg-lmd"
+    
+    log_info "Dependency uninstall completed"
 }
 
 ClearMeta() {
-    rm -rf /tmp/lmd
+    log_info "Clearing metadata..."
+    safe_remove "/tmp/lmd"
+    log_info "Metadata cleared"
 }
 
+# Main execution
+main() {
+    log_info "Starting uninstallation process..."
+    
+    UninstallSupiedtLmd
+    UninstallDriver
+    UninstallDocker
+    UninstallDependency
+    ClearMeta
+    
+    echo
+    log_info "All components uninstalled successfully"
+    echo
+}
 
-UninstallSupiedtLmd
-UninstallDriver
-UninstallDocker
-UninstallDenpendency
-ClearMeta
-echo
-echo -e "${GREEN}Uninstall all success!${RESET}"
-echo
+main

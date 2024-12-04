@@ -82,8 +82,8 @@ download() {
     local path=$2
 
     for ((i=1; i<=max_retries; i++)); do
-        echo "Attempt $i of $max_retries..."
-        curl -fsSL -o "${path}" "${url}"
+        echo "Attempt $i of $max_retries at $(date)..."
+        curl --max-time 30 -fsSL -o "${path}" "${url}"
         if [[ $? -eq 0 ]]; then
             return 0
         else
@@ -97,17 +97,44 @@ download() {
 }
 
 
+confirm_action() {
+    echo -e "${YELLOW}是否已经阅读过 README.md 文件？[yY/nN] ${RESET}"
+    read choice
+    case "${choice}" in
+        y|Y )
+            return 0
+            ;;
+        * )
+            echo -e "${RED}请注意在执行该脚本之前，请先阅读 README.md 文件 ${RESET}"
+            return 1
+            ;;
+    esac
+}
+
 install() {
     ScriptConfigurationDependency
     AllowScriptDependencies
-    /tmp/lmd/miniconda/bin/ansible-playbook lmd-install.yaml
+    /tmp/lmd/miniconda/bin/python3.10 -m pip --version || {
+        echo -e "${RED}pip 不可用，请检查 Miniconda 安装。${RESET}"
+        exit 1
+    }
+    /tmp/lmd/miniconda/bin/ansible-playbook lmd-install.yaml || {
+        echo -e "${RED}安装失败，请检查日志。${RESET}"
+        exit 1
+    }
+    /tmp/lmd/miniconda/bin/ansible --version || {
+        echo -e "${RED}Ansible 安装验证失败。${RESET}"
+        exit 1
+    }
 }
-
 
 uninstall() {
     ScriptConfigurationDependency
     AllowScriptDependencies
-    /tmp/lmd/miniconda/bin/ansible-playbook lmd-uninstall.yaml
+    /tmp/lmd/miniconda/bin/ansible-playbook lmd-uninstall.yaml || {
+        echo -e "${RED}卸载失败，请检查日志。${RESET}"
+        exit 1
+    }
 }
 
 clear() {
@@ -134,47 +161,16 @@ clear() {
     echo -e "${GREEN}LMD clear success!${RESET}"
 }
 
-
 main() {
     case "$1" in
         install)
-            echo -e "${YELLOW}是否已经阅读过 README.md 文件？[yY/nN] ${RESET}"
-            read choice
-            case "${choice}" in
-                y|Y )
-                    install
-                    ;;
-                * )
-                    echo -e "${RED}请注意在执行该脚本之前，请先阅读 README.md 文件 ${RESET}"
-                    exit 1
-                    ;;
-            esac
+            confirm_action && install
             ;;
         uninstall)
-            echo -e "${YELLOW}是否已经阅读过 README.md 文件？[yY/nN] ${RESET}"
-            read choice
-            case "${choice}" in
-                y|Y )
-                    uninstall
-                    ;;
-                * )
-                    echo -e "${RED}请注意在执行该脚本之前，请先阅读 README.md 文件 ${RESET}"
-                    exit 1
-                    ;;
-            esac
+            confirm_action && uninstall
             ;;
         clear)
-            echo -e "${YELLOW}是否已经阅读过 README.md 文件？[yY/nN] ${RESET}"
-            read choice
-            case "${choice}" in
-                y|Y )
-                    clear
-                    ;;
-                * )
-                    echo -e "${RED}请注意在执行该脚本之前，请先阅读 README.md 文件 ${RESET}"
-                    exit 1
-                    ;;
-            esac
+            confirm_action && clear
             ;;
         *)
             echo -e "${RED}请注意在执行该脚本之前，请先阅读 README.md 文件 ${RESET}\n"
@@ -183,7 +179,5 @@ main() {
             ;;
     esac
 }
-
-
 
 main "$@" || exit 1

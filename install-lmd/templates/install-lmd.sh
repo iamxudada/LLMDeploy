@@ -23,45 +23,89 @@ set -e
 export TMOUT=0
 umask 022
 
+# Color definitions
 RED='\033[31m'
 GREEN='\033[32m'
 YELLOW='\033[33m'
 RESET='\033[0m'
 
+# Log functions
+log_info() {
+    printf "${GREEN}[INFO]${RESET} %s\n" "$1"
+}
+
+log_warn() {
+    printf "${YELLOW}[WARN]${RESET} %s\n" "$1"
+}
+
+log_error() {
+    printf "${RED}[ERROR]${RESET} %s\n" "$1" >&2
+}
+
+# Configuration
 SUPUEDT_LMD_WORKSPACE_PATH="{{ lmdprojectpath }}"
-LMD_BASIC_IMAGES="db valkey minio clickhouse etcd milvus tdengine kkfileview registry frontend backend lmd-py"  # 基础镜像
+LMD_BASIC_IMAGES="db valkey minio clickhouse etcd milvus tdengine kkfileview registry frontend backend lmd-py"
 LMD_BASIC_IMAGE_VERSION="v1"
-LMD_TRAIN_IMAGE=""  # 训练镜像
-LMD_FS_MW_IMAGE=""  # fastchat modelwork 镜像
-LMD_FS_AC_IMAGE=""  # fastchat api contoller 镜像
-LMD_VLLM_IMAGE=""   # vllm 镜像（若平台不支持，请勿填）
+LMD_TRAIN_IMAGE=""
+LMD_FS_MW_IMAGE=""
+LMD_FS_AC_IMAGE=""
+LMD_VLLM_IMAGE=""
 
-
+# Create workspace directory if it doesn't exist
 if [ ! -d "${SUPUEDT_LMD_WORKSPACE_PATH}" ]; then
-    mkdir -p ${SUPUEDT_LMD_WORKSPACE_PATH}
+    mkdir -p "${SUPUEDT_LMD_WORKSPACE_PATH}" || {
+        log_error "Failed to create workspace directory: ${SUPUEDT_LMD_WORKSPACE_PATH}"
+        exit 1
+    }
 fi
 
-
-if [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml" ] && [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/.env" ]; then
-    echo -e "${RED}未发现项目启动文件 ${RESET}"
+# Check for required files
+if [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml" ] || [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/.env" ]; then
+    log_error "Required project startup files not found"
     exit 1
-if
+fi
 
+# Download and extract volume data if needed
 if [ ! -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" ]; then
-    wget -q 
+    log_info "Downloading lmd-volume.tar.xz..."
+    wget -q --show-progress --tries=3 --timeout=60 "YOUR_DOWNLOAD_URL" -O "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" || {
+        log_error "Failed to download lmd-volume.tar.xz"
+        exit 1
+    }
+fi
 
-
-if [ -d "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" ]; then
-    tar -xzf ${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz -C ${SUPUEDT_LMD_WORKSPACE_PATH}
+# Extract volume data
+if [ -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" ]; then
+    log_info "Extracting volume data..."
+    tar -xf "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd-volume.tar.xz" -C "${SUPUEDT_LMD_WORKSPACE_PATH}" || {
+        log_error "Failed to extract volume data"
+        exit 1
+    }
 else
-    docker-compose -f ${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml pull
-if
+    log_info "Pulling docker images..."
+    docker-compose -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml" pull || {
+        log_error "Failed to pull docker images"
+        exit 1
+    }
+fi
 
+# Pull required images
+log_info "Checking and pulling basic images..."
 for image in ${LMD_BASIC_IMAGES}; do
-    is_ready=$(docker images | grep ${image})
-    if [ ! -a ${is_ready} ]; then
-        docker pull quay.io/supiedt/${image}:${LMD_BASIC_IMAGE_VERSION}
+    if ! docker images "quay.io/supiedt/${image}:${LMD_BASIC_IMAGE_VERSION}" --format "{{.Repository}}" | grep -q "${image}"; then
+        log_info "Pulling image: ${image}"
+        docker pull "quay.io/supiedt/${image}:${LMD_BASIC_IMAGE_VERSION}" || {
+            log_error "Failed to pull image: ${image}"
+            exit 1
+        }
     fi
 done
 
-docker-compose -f ${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml up -d
+# Start services
+log_info "Starting services..."
+docker-compose -f "${SUPUEDT_LMD_WORKSPACE_PATH}/lmd.yaml" up -d || {
+    log_error "Failed to start services"
+    exit 1
+}
+
+log_info "Installation completed successfully"

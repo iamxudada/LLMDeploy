@@ -28,6 +28,14 @@ GREEN='\033[32m'
 YELLOW='\033[33m'
 RESET='\033[0m'
 
+copy_with_permissions() {
+    local source_path="$1"
+    local destination_path="$2"
+    local mode="$3"
+    yes | cp -a "${source_path}" "${destination_path}"
+    chmod "${mode}" "${destination_path}"
+}
+
 # 获取安装包
 if [[ $(uname -m) = 'x86_64' ]]; then
   DockerUrl="https://mirror.sjtu.edu.cn/docker-ce/linux/static/stable/x86_64/docker-26.1.4.tgz"
@@ -37,32 +45,30 @@ elif [[ $(uname -m) = 'aarch64' ]]; then
   DockerComposeUrl="https://github.com/docker/compose/releases/download/v2.27.3/docker-compose-linux-aarch64"
 fi
 
-DockerName=$(echo ${DockerUrl} | awk -F '/' '{print $NF}')
-DockerComposeName=$(echo $DockerComposeUrl | awk -F '/' '{print $NF}')
+DockerName=$(basename ${DockerUrl})
+DockerComposeName=$(basename ${DockerComposeUrl})
 
 download ${DockerUrl} "/tmp/lmd/${DockerName}"
 download ${DockerComposeUrl} "/tmp/lmd/${DockerComposeName}"
 
 # 安装
 tar -xvf /tmp/lmd/${DockerName} -C /tmp/lmd/
-yes|cp -a /tmp/lmd/${DockerComposeName} /tmp/lmd/docker/docker-compose
-chmod -R 0755 /tmp/lmd/docker
+mkdir -p /tmp/lmd/docker
+copy_with_permissions "/tmp/lmd/${DockerComposeName}" "/tmp/lmd/docker/docker-compose" 0755
 chown -R root:root /tmp/lmd/docker
-yes|cp -a /tmp/lmd/docker/* /usr/bin/
+copy_with_permissions "/tmp/lmd/docker/*" "/usr/bin/" 0755
 
 # 配置 systemd
-yes | cp -a /tmp/lmd/config/containerd.service /usr/lib/systemd/system/containerd.service
-yes|cp -a /tmp/lmd/config/docker.socket /usr/lib/systemd/system/docker.socket
-yes|cp -a /tmp/lmd/config/docker.service /usr/lib/systemd/system/docker.service
-chmod 0644 /usr/lib/systemd/system/{containerd.service,docker.socket,docker.service}
+copy_with_permissions "/tmp/lmd/config/containerd.service" "/usr/lib/systemd/system/containerd.service" 0644
+copy_with_permissions "/tmp/lmd/config/docker.socket" "/usr/lib/systemd/system/docker.socket" 0644
+copy_with_permissions "/tmp/lmd/config/docker.service" "/usr/lib/systemd/system/docker.service" 0644
 
 # 创建 docker 组
 groupadd -f docker
 
 # 配置 docker
 mkdir -p /etc/docker
-yes|cp -a /tmp/lmd/config/daemon.json /etc/docker/daemon.json
-chmod 0644 /etc/docker/daemon.json
+copy_with_permissions "/tmp/lmd/config/daemon.json" "/etc/docker/daemon.json" 0644
 
 # 配置 docker.socket 权限
 chmod 0666 /var/run/docker.sock
@@ -80,12 +86,12 @@ download() {
     local path=$2
 
     for ((i=1; i<=max_retries; i++)); do
-        echo "Attempt $i of ${max_retries}..."
+        printf "Attempt %d of %d at %s...\n" "$i" "$max_retries" "$(date)"
         curl -fsSL -o "${path}" "${url}"
         if [[ $? -eq 0 ]]; then
             return 0
         else
-            echo "Download failed with error code $?. Retrying in ${retry_delay} seconds..."
+            printf "Download failed with error code %d. Retrying in %d seconds...\n" "$?" "$retry_delay"
             sleep ${retry_delay}
         fi
     done

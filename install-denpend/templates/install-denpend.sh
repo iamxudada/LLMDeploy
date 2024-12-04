@@ -28,38 +28,40 @@ GREEN='\033[32m'
 YELLOW='\033[33m'
 RESET='\033[0m'
 
+install_packages() {
+    local packages="$@"
+    if command -v apt-get &> /dev/null; then
+        apt-get update
+        apt-get install -y ${packages} || {
+            echo -e "${RED}Package installation failed: ${packages}${RESET}"
+            exit 1
+        }
+    elif command -v dnf &> /dev/null; then
+        dnf makecache
+        dnf install -y ${packages} || {
+            echo -e "${RED}Package installation failed: ${packages}${RESET}"
+            exit 1
+        }
+    else
+        echo -e "${RED}Unsupported package manager.${RESET}"
+        exit 1
+    fi
+}
+
 # 获取架构类型
 os_name=$(awk -F '=' '/^NAME/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
 os_version=$(awk -F '=' '/^VERSION_ID/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
 os_architecture=$(uname -m)
 
 case "${os_name} ${os_version}" in
-    "Ubuntu 18.04")
+    "Ubuntu 18.04"|"Ubuntu 20.04")
         mv -f /etc/apt/sources.list /etc/apt/sources.list.bak
-        cp /tmp/lmd/repo/Ubuntu-18.04.repo /etc/apt/sources.list
-        apt-get update
-        apt-get install -y curl wget git pciutils gcc g++ make unzip zip dkms kernel-headers-$(uname -r)
-        # 锁定内核版本
+        cp /tmp/lmd/repo/Ubuntu-${os_version}.repo /etc/apt/sources.list
+        install_packages curl wget git pciutils gcc g++ make unzip zip dkms kernel-headers-$(uname -r)
         apt-mark hold linux-image-$(uname -r) linux-header-$(uname -r)
         apt-mark showhold
-        # 如果有子节点则安装 nfs
         if [ -z "{{ groups.workers }}" ]; then
-            apt-get install -y nfs-kernel-server nfs-common
-            systemctl enable nfs-kernel-server.service --now
-            install_nfs="true"
-        fi
-        ;;
-    "Ubuntu 20.04")
-        mv -f /etc/apt/sources.list /etc/apt/sources.list.bak
-        cp /tmp/lmd/repo/Ubuntu-20.04.repo /etc/apt/sources.list
-        apt-get update
-        apt-get install -y curl wget git pciutils gcc g++ make unzip zip dkms kernel-headers-$(uname -r)
-        # 锁定内核版本
-        apt-mark hold linux-image-$(uname -r) linux-header-$(uname -r)
-        apt-mark showhold
-        # 如果有子节点则安装 nfs
-        if [ -z "{{ groups.workers }}" ]; then
-            apt-get install -y nfs-kernel-server nfs-common
+            install_packages nfs-kernel-server nfs-common
             systemctl enable nfs-kernel-server.service --now
             install_nfs="true"
         fi
@@ -67,15 +69,11 @@ case "${os_name} ${os_version}" in
     "EulerOS 2.0")
         mv -f /etc/yum.repos.d/EulerOS.repo /etc/yum.repos.d/EulerOS.repo.bak
         cp /tmp/lmd/repo/EulerOS.repo /etc/yum.repos.d/EulerOS.repo
-        dnf makecache
-        dnf install -y curl wget git pciutils gcc g++ make unzip zip dkms kernel-headers-$(uname -r) kernel-devel-$(uname -r) python3-dnf-plugin-versionlock
-        # 锁定内核版本
+        install_packages curl wget git pciutils gcc g++ make unzip zip dkms kernel-headers-$(uname -r) kernel-devel-$(uname -r) python3-dnf-plugin-versionlock
         dnf versionlock add kernel-$(uname -r) kernel-headers-$(uname -r)
         dnf versionlock list
-
-        # 如果有子节点则安装 nfs
         if [ -z "{{ groups.workers }}" ]; then
-            dnf install -y nfs-utils rpcbind
+            install_packages nfs-utils rpcbind
             systemctl enable rpcbind.service --now
             systemctl enable nfs-server.service --now
             install_nfs="true"
@@ -87,13 +85,16 @@ case "${os_name} ${os_version}" in
         ;;
 esac
 
-# 创建用户
-if [ ! -d "/home/HwHiAiUser" ]; then
-    useradd -d /home/HwHiAiUser -m -s /usr/sbin/nologin HwHiAiUser
-fi
+create_user() {
+    local username="$1"
+    local home_dir="$2"
+    if [ ! -d "${home_dir}" ]; then
+        useradd -d "${home_dir}" -m -s /usr/sbin/nologin "${username}"
+    fi
+}
 
-# 设置 sysctl 参数
-cat << EOF > /etc/sysctl.d/lmd.conf
+set_sysctl_params() {
+    cat << EOF > /etc/sysctl.d/lmd.conf
 vm.dirty_background_ratio = 5                    # lmd
 vm.dirty_ratio = 10                              # lmd
 kernel.sched_autogroup_enabled = 0               # lmd
@@ -123,22 +124,26 @@ net.ipv4.tcp_max_tw_buckets = 5000               # lmd
 net.ipv4.tcp_max_syn_backlog = 4096              # lmd
 fs.file-max = 655350                             # lmd
 EOF
-sysctl -p
+    sysctl -p
+}
 
-
-# 设置文件句柄限制
-ulimit -n 655350
-cat << EOF > /etc/security/limits.d/lmd.conf
+set_file_limits() {
+    ulimit -n 655350
+    cat << EOF > /etc/security/limits.d/lmd.conf
 # lmd
 * soft nofile 655350
 * hard nofile 655350
 * soft nproc 655350
 * hard nproc 655350
 EOF
+}
+
+create_user "HwHiAiUser" "/home/HwHiAiUser"
+set_sysctl_params
+set_file_limits
 
 # 配置 lvm
 if [ {{ is_createdatalvm }} == "true" ]; then
-
     getPVdisplayName=$(pvdisplay | grep "PV Name" | awk '{ print $3}' | paste -sd' ' -)
     if [ "${getPVdisplayName}" != "{{ lvm_compositiondisks }}" ]; then
         for i in {{ lvm_compositiondisks }}; do
@@ -182,5 +187,3 @@ if [ {{ is_createdatalvm }} == "true" ]; then
         mount -a
     fi
 fi
-
-
