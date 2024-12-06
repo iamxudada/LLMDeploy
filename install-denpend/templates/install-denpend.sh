@@ -28,7 +28,6 @@ GREEN='\033[32m'
 YELLOW='\033[33m'
 RESET='\033[0m'
 
-# Logging functions
 log_info() {
     printf "${GREEN}[INFO]${RESET} %s\n" "$1"
 }
@@ -41,7 +40,6 @@ log_error() {
     printf "${RED}[ERROR]${RESET} %s\n" "$1" >&2
 }
 
-# Helper function to check command existence
 check_cmd() {
     if ! command -v "$1" &>/dev/null; then
         log_error "Command not found: $1"
@@ -49,7 +47,6 @@ check_cmd() {
     fi
 }
 
-# Helper function to check directory existence
 check_dir() {
     if [ ! -d "$1" ]; then
         log_info "Creating directory: $1"
@@ -88,14 +85,12 @@ install_packages() {
     fi
 }
 
-# System information
 readonly OS_NAME=$(awk -F '=' '/^NAME/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
 readonly OS_VERSION=$(awk -F '=' '/^VERSION_ID/{print $2}' /etc/os-release | tr -d '"' | awk '{$1=$1};1')
 readonly OS_ARCH=$(uname -m)
 readonly KERNEL_VERSION=$(uname -r)
 readonly CURRENT_IP=$(hostname -I | awk '{print $1}')
 
-# Setup package repositories and install dependencies
 setup_os_dependencies() {
     case "${OS_NAME} ${OS_VERSION}" in
         "Ubuntu 18.04"|"Ubuntu 20.04")
@@ -214,8 +209,7 @@ configure_lvm() {
     fi
     
     log_info "Configuring LVM..."
-    
-    # Create Physical Volumes if needed
+
     local current_pvs=$(pvdisplay | grep "PV Name" | awk '{ print $3}' | paste -sd' ' -)
     if [ "${current_pvs}" != "{{ lvm_compositiondisks }}" ]; then
         for disk in {{ lvm_compositiondisks }}; do
@@ -226,8 +220,7 @@ configure_lvm() {
             }
         done
     fi
-    
-    # Create Volume Group if needed
+
     local current_vg=$(vgdisplay | grep "VG Name" | awk '{ print $3}' | paste -sd' ' -)
     if [ "${current_vg}" != "vg-lmd" ]; then
         log_info "Creating VG: vg-lmd"
@@ -240,8 +233,7 @@ configure_lvm() {
             return 1
         }
     fi
-    
-    # Format if needed
+
     if [ "$(lsblk -no FSTYPE /dev/vg-lmd/data)" != "ext4" ]; then
         log_info "Formatting /dev/vg-lmd/data with ext4"
         mkfs.ext4 -F /dev/vg-lmd/data || {
@@ -249,12 +241,10 @@ configure_lvm() {
             return 1
         }
     fi
-    
-    # Create and clean mount point
+
     check_dir "/data"
     rm -rf /data/* || log_warn "Failed to clean /data directory"
-    
-    # Update fstab
+
     local data_uuid=$(blkid -s UUID -o value /dev/vg-lmd/data)
     if ! grep -q "${data_uuid}" /etc/fstab; then
         echo "UUID=${data_uuid} /data ext4 defaults 0 0" >> /etc/fstab || {
@@ -267,16 +257,14 @@ configure_lvm() {
         log_error "Failed to mount all filesystems"
         return 1
     }
-    
-    # Configure NFS if this is the master node
+
     if [ -z "{{ groups.workers }}" ] && [ "${CURRENT_IP}" = "{{ groups.master }}" ]; then
         check_dir "{{ lmdprojectpath }}/backend/BaseModels"
         mkdir -p /etc/exports.d
         echo "{{ lmdprojectpath }}/backend/BaseModels *(rw,async,no_root_squash,no_subtree_check,insecure)" > /etc/exports.d/lmd.conf
         exportfs -avf || log_warn "Failed to export NFS share"
     fi
-    
-    # Mount NFS on worker nodes
+
     if [ -n "{{ groups.workers }}" ] && [ "${CURRENT_IP}" = "{{ groups.workers }}" ]; then
         check_dir "{{ lmdprojectpath }}/backend/BaseModels"
         if ! grep -q "{{ lmdprojectpath }}/backend/BaseModels" /etc/fstab; then

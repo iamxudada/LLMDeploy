@@ -194,7 +194,7 @@ uninstall() {
     log_info "Uninstallation completed successfully"
 }
 
-clear() {
+clean() {
     log_info "Starting cleanup..."
 
     case "${OS_NAME}" in
@@ -225,8 +225,8 @@ main() {
         uninstall)
             confirm_action && uninstall
             ;;
-        clear)
-            confirm_action && clear
+        clean)
+            confirm_action && clean
             ;;
         *)
             log_error "Usage: $0 {install|uninstall|clear}"

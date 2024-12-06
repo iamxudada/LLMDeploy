@@ -58,9 +58,9 @@ LMDeploy 是一个基于 Ansible 的大模型部署工具，用于自动化部�
 在 `inventory` 文件中设置必要的变量：
 ```ini
 [lmd:vars]
-lmdprojectpath=/data/applications/lmd
-is_createdatalvm=false
-lvm_compositiondisks="/dev/sdb /dev/sdc"
+lmdprojectpath=/data/applications/lmd     # LMD 项目路径
+is_createdatalvm=false                    # 是否创建数据 LVM
+lvm_compositiondisks="/dev/sdb /dev/sdc"  # 数据 LVM 磁盘组合
 ```
 
 ### 3. 执行部署
@@ -70,6 +70,9 @@ lvm_compositiondisks="/dev/sdb /dev/sdc"
 
 # 卸载
 ./lmd uninstall
+
+# 清理执行节点的相关包
+./lmd clean
 ```
 
 ## 角色说明
